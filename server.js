@@ -1,10 +1,15 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
+const next = require('next');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
+
+const dev = process.env.NODE_ENV !== 'production';
+const nextApp = next({ dev });
+const handle = nextApp.getRequestHandler();
 
 let users = {}; // Store connected users
 let chats = {}; // Temporary chat storage
@@ -36,6 +41,12 @@ io.on('connection', (socket) => {
     });
 });
 
-server.listen(3000, () => {
-    console.log('Server is running on http://localhost:3000');
+nextApp.prepare().then(() => {
+    app.all('*', (req, res) => {
+        return handle(req, res);
+    });
+
+    server.listen(3000, () => {
+        console.log('Server is running on http://localhost:3000');
+    });
 });
