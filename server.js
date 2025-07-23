@@ -14,6 +14,7 @@ const io = new Server(server);
 let users = {}; // Store connected users
 let chats = {}; // Temporary chat storage
 
+// Initialize Socket.IO connection handling
 io.on('connection', (socket) => {
     console.log('A user connected:', socket.id);
 
@@ -41,7 +42,17 @@ io.on('connection', (socket) => {
     });
 });
 
-nextApp.prepare().then(() => {
+// Initialize Next.js
+nextApp.prepare()
+    .then(() => {
+    // Make sure this route comes before the catch-all handler
+    // Add middleware for JSON parsing
+    app.use(express.json());
+    app.use(express.urlencoded({ extended: true }));
+    
+    // Add any API routes here
+    
+    // Catch-all handler for Next.js
     app.all('*', (req, res) => {
         return handle(req, res);
     });
@@ -49,4 +60,9 @@ nextApp.prepare().then(() => {
     server.listen(3000, () => {
         console.log('Server is running on http://localhost:3000');
     });
+})
+.catch((ex) => {
+    console.error('An error occurred during Next.js initialization:');
+    console.error(ex.stack);
+    process.exit(1);
 });
