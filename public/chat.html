@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Chat</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="chat-container">
+        <!-- Left Sidebar -->
+        <div class="sidebar left-sidebar">
+            <div class="sidebar-header">
+                <h2>Live Chat</h2>
+                <div class="status-indicator online"></div>
+            </div>
+            
+            <div class="search-container">
+                <input type="text" placeholder="Search..." class="search-input">
+            </div>
+
+            <div class="conversation-list">
+                <div class="conversation-item active">
+                    <div class="conversation-avatar">
+                        <div class="avatar-placeholder">💬</div>
+                    </div>
+                    <div class="conversation-info">
+                        <div class="conversation-name">General Chat</div>
+                        <div class="conversation-preview">Active conversation</div>
+                    </div>
+                    <div class="conversation-badge">
+                        <span id="messageCount">0</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Chat Area -->
+        <div class="main-chat">
+            <div class="chat-header">
+                <div class="chat-title">
+                    <h3>General Chat</h3>
+                    <div class="chat-subtitle">
+                        <span id="onlineCount">0</span> members online
+                    </div>
+                </div>
+                <div class="chat-actions">
+                    <button class="action-btn" onclick="toggleMembers()">
+                        <span>👥</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="messages-container" id="messagesContainer">
+                <div class="messages-list" id="messagesList">
+                    <!-- Messages will be displayed here -->
+                </div>
+            </div>
+
+            <div class="message-input-container">
+                <form id="messageForm" class="message-form">
+                    <input type="text" id="messageInput" placeholder="Type your message..." maxlength="500" required>
+                    <button type="submit" class="send-btn">
+                        <span>→</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Right Sidebar -->
+        <div class="sidebar right-sidebar" id="rightSidebar">
+            <div class="sidebar-header">
+                <h3>Members</h3>
+                <span id="memberCount" class="member-count">0</span>
+            </div>
+
+            <div class="members-list" id="membersList">
+                <!-- Members will be displayed here -->
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="chat.js"></script>
+</body>
+</html>
