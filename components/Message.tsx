@@ -23,7 +23,7 @@ const Message: React.FC<MessageProps> = ({ message }) => {
   
   const messageBubbleClasses = `max-w-md lg:max-w-xl p-4 rounded-2xl shadow-md transition-colors duration-300 ${
     isUser 
-      ? 'bg-gray-200 text-black dark:bg-white dark:text-black rounded-br-none' 
+      ? 'bg-gray-200 text-black dark:bg-gray-700 dark:text-gray-200 rounded-br-none' 
       : 'bg-white dark:bg-gray-800 text-black dark:text-white border border-gray-200 dark:border-transparent rounded-bl-none'
   }`;
 
