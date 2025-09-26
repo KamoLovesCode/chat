@@ -1,197 +1,264 @@
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { type Chat, type Part } from '@google/genai';
-import { startChat, generateImage } from './services/geminiService';
-import { ChatMessage, MessageRole, AppMode, ModelConfig } from './types';
-import Header from './components/Header';
-import ChatWindow from './components/ChatWindow';
-import ChatInput from './components/ChatInput';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { GoogleGenAI, LiveSession, LiveServerMessage, Modality, Blob } from '@google/genai';
+import { ChatMessage as ChatMessageType } from './types';
+import { ChatInput } from './components/ChatInput';
+import { ChatMessage } from './components/ChatMessage';
+import { WelcomeScreen } from './components/WelcomeScreen';
+import { Toast } from './components/Toast';
+import { Header } from './components/Header';
+import { useTranslation } from './hooks/useTranslation';
+import { languages } from './translations';
 
-const MODELS: ModelConfig[] = [
-  {
-    id: 'chat',
-    name: 'Chat & Write',
-    model: 'gemini-2.5-flash',
-    mode: AppMode.CHAT,
-    systemInstruction: 'You are a helpful and friendly assistant. Your responses should be informative and engaging.',
-  },
-  {
-    id: 'code',
-    name: 'Code Assistant',
-    model: 'gemini-2.5-flash',
-    mode: AppMode.CHAT,
-    systemInstruction: 'You are an expert code assistant. Provide clear, concise, and accurate code examples and explanations. Use markdown for code blocks.',
-  },
-  {
-    id: 'image',
-    name: 'Creative Images',
-    model: 'imagen-4.0-generate-001',
-    mode: AppMode.IMAGE,
-  },
-];
+const API_KEY = process.env.API_KEY;
+if (!API_KEY) {
+  throw new Error("API_KEY environment variable not set");
+}
 
-const fileToBase64 = (file: File): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => {
-      if (typeof reader.result !== 'string') {
-        return reject(new Error('FileReader result is not a string'));
-      }
-      const base64String = reader.result.split(',')[1];
-      resolve(base64String);
-    };
-    reader.onerror = (error) => reject(error);
-  });
-};
+const ai = new GoogleGenAI({ apiKey: API_KEY });
+
+// Helper functions for audio decoding
+function decode(base64: string): Uint8Array {
+    const binaryString = atob(base64);
+    const len = binaryString.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes;
+}
+
+async function decodeAudioData(
+    data: Uint8Array,
+    ctx: AudioContext,
+    sampleRate: number,
+    numChannels: number,
+): Promise<AudioBuffer> {
+    const dataInt16 = new Int16Array(data.buffer);
+    const frameCount = dataInt16.length / numChannels;
+    const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+
+    for (let channel = 0; channel < numChannels; channel++) {
+        const channelData = buffer.getChannelData(channel);
+        for (let i = 0; i < frameCount; i++) {
+            channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
+        }
+    }
+    return buffer;
+}
+
 
 const App: React.FC = () => {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  const [chat, setChat] = useState<Chat | null>(null);
-  const [selectedModelId, setSelectedModelId] = useState<string>(MODELS[0].id);
+  const [messages, setMessages] = useState<ChatMessageType[]>([]);
+  const [toasts, setToasts] = useState<{ id: number; message: string; type: 'error' | 'info' }[]>([]);
+  const [isGeminiSpeaking, setIsGeminiSpeaking] = useState(false);
+  const [sessionId, setSessionId] = useState(() => Date.now());
+  
+  const { t, language } = useTranslation();
 
-  const selectedModel = useMemo(() => MODELS.find(m => m.id === selectedModelId)!, [selectedModelId]);
+  const sessionPromiseRef = useRef<Promise<LiveSession> | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const outputAudioContextRef = useRef<AudioContext | null>(null);
+  const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
+  const nextStartTimeRef = useRef(0);
 
-  const resetChat = useCallback(() => {
-    setError(null);
-    setIsLoading(false);
-    
-    let welcomeMessage = "Hello! How can I help you today? You can also send me an image.";
-    if (selectedModel.id === 'code') {
-        welcomeMessage = "I'm your Code Assistant. Ask me anything about programming!";
-    } else if (selectedModel.id === 'image') {
-        welcomeMessage = "Describe an image you'd like me to create.";
-    }
-    
-    setMessages([{ role: MessageRole.MODEL, content: welcomeMessage }]);
-
-    if (selectedModel.mode === AppMode.CHAT) {
-      try {
-        setChat(startChat(selectedModel.model, selectedModel.systemInstruction));
-      } catch (e: any) {
-        setError(e.message);
-        console.error(e);
-      }
-    } else {
-      setChat(null);
-    }
-  }, [selectedModel]);
+  const addToast = useCallback((message: string, type: 'error' | 'info' = 'info') => {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 5000);
+  }, []);
 
   useEffect(() => {
-    resetChat();
-  }, [resetChat]);
-
-  const handleSelectModel = (modelId: string) => {
-    if (modelId !== selectedModelId) {
-      setSelectedModelId(modelId);
+    if (!outputAudioContextRef.current) {
+        outputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
     }
-  };
+    const outputAudioContext = outputAudioContextRef.current;
+    const outputNode = outputAudioContext.createGain();
 
-  const handleChatMessage = async (message: string, file?: File | null) => {
-    if (!chat) return;
-    const parts: Part[] = [];
-    if (message.trim()) {
-      parts.push({ text: message.trim() });
-    }
-    if (file) {
-      const base64Data = await fileToBase64(file);
-      parts.push({
-        inlineData: {
-          data: base64Data,
-          mimeType: file.type,
+    const systemInstruction = `You are a helpful and friendly AI assistant named Kamogelo. Respond in ${languages[language].name}. Keep your responses concise and conversational. For questions about current events, recent information, or topics where up-to-date information is critical, use the search tool to provide the most accurate answers.`;
+    
+    sessionPromiseRef.current = ai.live.connect({
+        model: 'gemini-2.5-flash-native-audio-preview-09-2025',
+        callbacks: {
+            onopen: () => console.log('Session opened'),
+            onmessage: async (message: LiveServerMessage) => {
+                const base64Audio = message.serverContent?.modelTurn?.parts[0]?.inlineData.data;
+                if (base64Audio) {
+                    setIsGeminiSpeaking(true);
+                    nextStartTimeRef.current = Math.max(nextStartTimeRef.current, outputAudioContext.currentTime);
+                    const audioBuffer = await decodeAudioData(decode(base64Audio), outputAudioContext, 24000, 1);
+                    const source = outputAudioContext.createBufferSource();
+                    source.buffer = audioBuffer;
+                    source.connect(outputNode);
+                    source.addEventListener('ended', () => {
+                        sourcesRef.current.delete(source);
+                        if (sourcesRef.current.size === 0) {
+                            setIsGeminiSpeaking(false);
+                             setMessages(prev => {
+                                const lastGeminiMsgIndex = prev.findLastIndex(m => m.sender === 'gemini');
+                                if (lastGeminiMsgIndex > -1) {
+                                    const newMessages = [...prev];
+                                    const msgToUpdate = newMessages[lastGeminiMsgIndex];
+                                    if (msgToUpdate.isAudioPlaying) {
+                                        newMessages[lastGeminiMsgIndex] = { ...msgToUpdate, isAudioPlaying: false };
+                                        return newMessages;
+                                    }
+                                }
+                                return prev;
+                            });
+                        }
+                    });
+                    source.start(nextStartTimeRef.current);
+                    nextStartTimeRef.current += audioBuffer.duration;
+                    sourcesRef.current.add(source);
+                }
+
+                if (message.serverContent?.inputTranscription) {
+                    const text = message.serverContent.inputTranscription.text;
+                    setMessages(prev => {
+                        const lastMsg = prev[prev.length - 1];
+                        if (lastMsg?.sender === 'user') {
+                            const newMessages = [...prev];
+                            newMessages[newMessages.length - 1] = { ...lastMsg, content: lastMsg.content + text };
+                            return newMessages;
+                        }
+                        return [...prev, { id: `${Date.now()}-user`, sender: 'user', content: text }];
+                    });
+                }
+                
+                if (message.serverContent?.outputTranscription) {
+                    const text = message.serverContent.outputTranscription.text;
+                     setMessages(prev => {
+                        const lastMsg = prev[prev.length - 1];
+                        if (lastMsg?.sender === 'gemini') {
+                            const newMessages = [...prev];
+                            newMessages[newMessages.length - 1] = { ...lastMsg, content: lastMsg.content + text, isAudioPlaying: true };
+                            return newMessages;
+                        }
+                        return [...prev, { id: `${Date.now()}-gemini`, sender: 'gemini', content: text, isAudioPlaying: true }];
+                    });
+                }
+
+                if (message.serverContent?.turnComplete) {
+                    const metadata = (message.serverContent as any).groundingMetadata;
+                    if (metadata?.groundingChunks) {
+                        const sources = metadata.groundingChunks
+                            .map((chunk: any) => chunk.web)
+                            .filter((web: any) => web?.uri && web.title)
+                            .map((web: any) => ({ uri: web.uri, title: web.title }));
+
+                        if (sources.length > 0) {
+                             setMessages(prev => {
+                                const lastMsgIndex = prev.findLastIndex(m => m.sender === 'gemini');
+                                if (lastMsgIndex > -1) {
+                                    const newMessages = [...prev];
+                                    const currentSources = newMessages[lastMsgIndex].sources || [];
+                                    const newSources = sources.filter((s: any) => !currentSources.some(cs => cs.uri === s.uri));
+                                    if (newSources.length > 0) {
+                                       newMessages[lastMsgIndex] = { ...newMessages[lastMsgIndex], sources: [...currentSources, ...newSources] };
+                                       return newMessages;
+                                    }
+                                }
+                                return prev;
+                            });
+                        }
+                    }
+                }
+
+                if (message.serverContent?.interrupted) {
+                    for (const source of sourcesRef.current.values()) {
+                        source.stop();
+                    }
+                    sourcesRef.current.clear();
+                    nextStartTimeRef.current = 0;
+                    setIsGeminiSpeaking(false);
+                }
+            },
+            onerror: (e: ErrorEvent) => {
+                console.error('Session error', e);
+                if (e.message && e.message.includes('The service is currently unavailable')) {
+                    addToast(t('toast.serviceUnavailable'), 'error');
+                } else {
+                    addToast(t('toast.geminiError', { errorMessage: e.message }), 'error');
+                }
+            },
+            onclose: () => {
+                console.log('Session closed');
+            }
         },
-      });
-    }
-
-    const stream = await chat.sendMessageStream({ message: parts });
-    
-    let modelResponse = '';
-    for await (const chunk of stream) {
-      modelResponse += chunk.text;
-      setMessages((prev) => {
-        const newMessages = [...prev];
-        const lastMessage = newMessages[newMessages.length - 1];
-        if (lastMessage?.role === MessageRole.MODEL) {
-            lastMessage.content = modelResponse;
+        config: {
+            responseModalities: [Modality.AUDIO],
+            inputAudioTranscription: {},
+            outputAudioTranscription: {},
+            speechConfig: {
+                voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } }
+            },
+            tools: [{googleSearch: {}}],
+            systemInstruction
         }
-        return newMessages;
-      });
-    }
-  };
-
-  const handleImageGeneration = async (prompt: string) => {
-    const response = await generateImage(prompt);
-    const base64Image = response.generatedImages[0].image.imageBytes;
-    const imageUrl = `data:image/png;base64,${base64Image}`;
-    
-    setMessages(prev => {
-        const newMessages = [...prev];
-        const lastMessage = newMessages[newMessages.length - 1];
-        if (lastMessage?.role === MessageRole.MODEL) {
-            lastMessage.content = `Here is the image you requested for: "${prompt}"`;
-            lastMessage.attachment = {
-                url: imageUrl,
-                mimeType: 'image/png',
-            };
-        }
-        return newMessages;
     });
-  };
 
-  const handleSendMessage = useCallback(async (message: string, file?: File | null) => {
-    setIsLoading(true);
-    setError(null);
-    
-    const userMessage: ChatMessage = { role: MessageRole.USER, content: message };
-    if (file && selectedModel.mode === AppMode.CHAT) {
-      userMessage.attachment = {
-        url: URL.createObjectURL(file),
-        mimeType: file.type,
-      };
-    }
-    setMessages((prevMessages) => [...prevMessages, userMessage, { role: MessageRole.MODEL, content: '' }]);
-
-    try {
-      if (selectedModel.mode === AppMode.CHAT) {
-        await handleChatMessage(message, file);
-      } else if (selectedModel.mode === AppMode.IMAGE) {
-        await handleImageGeneration(message);
-      }
-    } catch (e: any) {
-      const errorMessage = "Sorry, something went wrong. Please try again.";
-      setError(errorMessage);
-      console.error(e);
-      setMessages(prev => {
-        const newMessages = [...prev];
-        const lastMessage = newMessages[newMessages.length-1];
-        if (lastMessage?.role === MessageRole.MODEL) {
-            lastMessage.content = errorMessage;
-        }
-        return newMessages;
-      })
-    } finally {
-      setIsLoading(false);
-    }
-  }, [chat, selectedModel]);
+    return () => {
+        sessionPromiseRef.current?.then(session => session.close());
+        outputAudioContextRef.current?.close();
+        outputAudioContextRef.current = null;
+    };
+  }, [language, addToast, t, sessionId]);
   
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  const handleNewChat = () => {
+    setMessages([]);
+    setSessionId(Date.now());
+  }
+
+  const showWelcome = messages.length === 0;
+
+  const lastMessage = messages[messages.length - 1];
+  const userLastMessageContent = (lastMessage?.sender === 'user') ? lastMessage.content : '';
+
   return (
-    <div className="flex flex-col h-screen bg-white dark:bg-black text-gray-900 dark:text-gray-100 font-['Montserrat',_sans-serif] transition-colors duration-300">
-      <Header />
-      {error && (
-        <div className="bg-red-500 text-white p-4 text-center">
-          <p>{error}</p>
+    <div className="flex flex-col h-screen font-sans bg-slate-50 text-gray-800">
+      <Header onNewChat={handleNewChat} />
+      <div className="fixed top-20 right-4 z-50 w-full max-w-sm space-y-2">
+          {toasts.map(toast => 
+              <Toast key={toast.id} message={toast.message} type={toast.type} onClose={() => setToasts(p => p.filter(t => t.id !== toast.id))} />
+          )}
+      </div>
+      
+      <div className="flex-1 w-full max-w-4xl mx-auto flex flex-col pt-16 overflow-hidden">
+        
+        <main className="flex-1 px-4 overflow-y-auto pt-8 md:pt-12 pb-4">
+          {showWelcome ? (
+            <WelcomeScreen />
+          ) : (
+            <div className="space-y-6">
+              {messages.map((msg) => (
+                <ChatMessage 
+                  key={msg.id} 
+                  message={msg}
+                />
+              ))}
+              <div ref={messagesEndRef} />
+            </div>
+          )}
+        </main>
+        
+        <div className="border-t border-gray-200 bg-white">
+            <div className="px-4 flex justify-center">
+                 <ChatInput 
+                    sessionPromise={sessionPromiseRef.current} 
+                    isGeminiSpeaking={isGeminiSpeaking}
+                    onMicPermissionError={() => addToast(t('toast.micError'), 'error')}
+                    liveInput={userLastMessageContent}
+                />
+            </div>
         </div>
-      )}
-      <ChatWindow messages={messages} isLoading={isLoading} />
-      <ChatInput 
-        onSendMessage={handleSendMessage} 
-        isLoading={isLoading} 
-        models={MODELS}
-        selectedModel={selectedModel}
-        onSelectModel={handleSelectModel}
-      />
+      </div>
     </div>
   );
 };

@@ -4,23 +4,70 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Gemini Chat</title>
+    <title>Kamogelo AI Chat</title>
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
     <script src="https://cdn.tailwindcss.com"></script>
-  <script type="importmap">
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Poppins', 'sans-serif'],
+            },
+            keyframes: {
+              'fade-in-up': {
+                '0%': { opacity: '0', transform: 'translateY(10px)' },
+                '100%': { opacity: '1', transform: 'translateY(0)' },
+              },
+              'pulse-dot': {
+                '0%, 80%, 100%': { transform: 'scale(0.8)', opacity: 0.5 },
+                '40%': { transform: 'scale(1.0)', opacity: 1 },
+              },
+              'glow': {
+                '0%, 100%': { boxShadow: '0 0 10px rgba(17, 24, 39, 0.5), 0 0 20px rgba(17, 24, 39, 0.3)' },
+                '50%': { boxShadow: '0 0 20px rgba(17, 24, 39, 0.7), 0 0 30px rgba(17, 24, 39, 0.5)' },
+              },
+              'pulse-ring': {
+                 '0%': { transform: 'scale(0.95)', boxShadow: '0 0 0 0 rgba(220, 38, 38, 0.7)' },
+                 '70%': { transform: 'scale(1.1)', boxShadow: '0 0 0 15px rgba(220, 38, 38, 0)' },
+                 '100%': { transform: 'scale(0.95)', boxShadow: '0 0 0 0 rgba(220, 38, 38, 0)' },
+              },
+              'wave': {
+                '0%': { transform: 'scaleY(0.1)' },
+                '50%': { transform: 'scaleY(1)' },
+                '100%': { transform: 'scaleY(0.1)' },
+              }
+            },
+            animation: {
+              'fade-in-up': 'fade-in-up 0.5s ease-out forwards',
+              'pulse-dot': 'pulse-dot 1.4s infinite ease-in-out both',
+              'glow': 'glow 2.5s infinite ease-in-out',
+              'pulse-ring': 'pulse-ring 1.5s infinite',
+              'wave': 'wave 1.2s ease-in-out infinite',
+            }
+          },
+        },
+      }
+    </script>
+
+    <script type="importmap">
 {
   "imports": {
-    "react/": "https://aistudiocdn.com/react@^19.1.1/",
-    "react": "https://aistudiocdn.com/react@^19.1.1",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.1.1/",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.19.0"
+    "@google/genai": "https://esm.sh/@google/genai@^1.14.0",
+    "react/": "https://esm.sh/react@^19.1.1/",
+    "react": "https://esm.sh/react@^19.1.1",
+    "react-dom/": "https://esm.sh/react-dom@^19.1.1/",
+    "react-markdown": "https://esm.sh/react-markdown@9.0.1",
+    "remark-gfm": "https://esm.sh/remark-gfm@4.0.0"
   }
 }
 </script>
 </head>
-  <body>
+  <body class="bg-slate-50 font-sans">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>
