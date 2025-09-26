@@ -248,7 +248,7 @@ const App: React.FC = () => {
   }, [chat, selectedModeConfig, code, selectedModelName]);
   
   return (
-    <div className="flex flex-col h-screen bg-white dark:bg-black text-gray-900 dark:text-gray-100 font-['Inter',_sans-serif] transition-colors duration-300">
+    <div className="flex flex-col h-screen bg-white dark:bg-black text-gray-900 dark:text-gray-100 font-sans transition-colors duration-300">
       <Header />
       {error && (
         <div className="bg-red-500 text-white p-4 text-center">
