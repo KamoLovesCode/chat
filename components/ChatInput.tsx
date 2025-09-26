@@ -48,7 +48,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
   return (
     <div className="bg-white/70 dark:bg-black/70 backdrop-blur-sm border-t border-gray-200 dark:border-gray-800 p-4 sticky bottom-0 transition-colors duration-300">
       <div className="max-w-4xl mx-auto space-y-4">
-        <div className="flex gap-4">
+        <div className="flex flex-col md:flex-row gap-4">
           <div className="flex-1">
             <ModeSelector
                 models={models}

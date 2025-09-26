@@ -1,5 +1,5 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 
 interface WebEditorInputProps {
   onSendMessage: (message: string) => void;
@@ -18,7 +18,23 @@ const WebEditorInput: React.FC<WebEditorInputProps> = ({
 }) => {
   const [prompt, setPrompt] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const lineNumbersRef = useRef<HTMLPreElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   
+  const [lines, setLines] = useState('1');
+
+  useEffect(() => {
+    const codeLines = code.split('\n');
+    const count = codeLines.length > 0 ? codeLines.length : 1;
+    setLines(Array.from({ length: count }, (_, i) => i + 1).join('\n'));
+  }, [code]);
+
+  const handleScroll = () => {
+    if (lineNumbersRef.current && textareaRef.current) {
+      lineNumbersRef.current.scrollTop = textareaRef.current.scrollTop;
+    }
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile && selectedFile.type === 'text/html') {
@@ -26,7 +42,6 @@ const WebEditorInput: React.FC<WebEditorInputProps> = ({
     } else if (selectedFile) {
         alert('Please select an HTML file.');
     }
-    // Reset file input to allow re-uploading the same file
     if(fileInputRef.current) {
         fileInputRef.current.value = '';
     }
@@ -42,15 +57,31 @@ const WebEditorInput: React.FC<WebEditorInputProps> = ({
 
   return (
     <div className="space-y-4">
-      <div className="relative">
-        <textarea
-          value={code}
-          onChange={(e) => onCodeChange(e.target.value)}
-          placeholder="Import or paste your HTML code here..."
-          disabled={isLoading}
-          className="w-full h-48 bg-gray-900 border border-gray-700 rounded-lg p-4 font-mono text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-500 transition duration-300 disabled:opacity-50 resize-y"
-          aria-label="Code editor"
-        />
+      {/* Sleek editor container */}
+      <div className="relative group bg-zinc-900 border border-zinc-700 rounded-lg overflow-hidden transition-colors duration-300 focus-within:ring-2 focus-within:ring-gray-500">
+        <div className="flex h-48 resize-y overflow-auto">
+          {/* Line numbers */}
+          <pre
+            ref={lineNumbersRef}
+            className="w-12 text-right p-4 font-mono text-sm text-zinc-500 bg-zinc-800 select-none overflow-y-hidden leading-relaxed"
+            aria-hidden="true"
+          >
+            {lines}
+          </pre>
+          {/* Textarea */}
+          <textarea
+            ref={textareaRef}
+            value={code}
+            onChange={(e) => onCodeChange(e.target.value)}
+            onScroll={handleScroll}
+            placeholder="Import or paste your HTML code here..."
+            disabled={isLoading}
+            className="flex-1 bg-transparent p-4 font-mono text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none disabled:opacity-50 resize-none whitespace-pre-wrap break-words leading-relaxed"
+            aria-label="Code editor"
+            spellCheck="false"
+            wrap="soft"
+          />
+        </div>
         <input
             type="file"
             ref={fileInputRef}
@@ -62,7 +93,7 @@ const WebEditorInput: React.FC<WebEditorInputProps> = ({
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={isLoading}
-            className="absolute top-3 right-3 p-2 bg-gray-700 text-gray-300 rounded-md hover:bg-gray-600 transition-colors duration-300 disabled:opacity-50"
+            className="absolute top-3 right-3 p-2 bg-zinc-700 text-zinc-300 rounded-md hover:bg-zinc-600 transition-colors duration-300 disabled:opacity-50 z-10"
             aria-label="Import HTML file"
         >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -70,6 +101,7 @@ const WebEditorInput: React.FC<WebEditorInputProps> = ({
             </svg>
         </button>
       </div>
+
        <form onSubmit={handleSubmit} className="flex items-center space-x-4">
             <input
               type="text"
