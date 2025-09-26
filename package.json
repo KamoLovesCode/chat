@@ -1,5 +1,5 @@
 {
-  "name": "kamogelo-streaming-chat",
+  "name": "gemini-chat",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -9,11 +9,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@google/genai": "^1.14.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
-    "react-markdown": "9.0.1",
-    "remark-gfm": "4.0.0"
+    "@google/genai": "^1.19.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

@@ -1,7 +1,5 @@
 {
-  "requestFramePermissions": [
-    "microphone"
-  ],
-  "name": "Kamogelo Streaming Chat",
-  "description": ""
+  "name": "Gemini Chat",
+  "description": "A sleek and modern chat application powered by the Gemini API, allowing you to have real-time, streaming conversations with an advanced AI.",
+  "requestFramePermissions": []
 }
